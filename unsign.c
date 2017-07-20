@@ -8,13 +8,16 @@
 #include <unistd.h>
 #include "unsign.h"
 
-#define KBYTES ((UNSIGNBITS)/8)    // bytes in longest supported key
-#define BWORDS ((UNSIGNBITS/32)+1) // we only need one addition bit but have to allocate another word
+// bytes in longest supported key
+#define KBYTES ((UNSIGNBITS)/8)   
 
-// "bignum" array
-typedef uint32_t BN[BWORDS];
+// we only need one additional bit but have to allocate another word
+#define BNWORDS ((UNSIGNBITS/32)+1) 
 
-// true if specified bit 0-4095 set in BN 
+// "Bignum" array type, passed by reference in all cases.
+typedef uint32_t BN[BNWORDS];
+
+// true if specified bit 0 to UNSIGNBITS+31 (LSB to MSB) is set in BN 
 #define bit(a,i) (a[i/32] & (1<<(i&31)))
 
 // a = 0
@@ -26,12 +29,13 @@ typedef uint32_t BN[BWORDS];
 // a = n, where n is 32-bit numeric
 #define setn(a,n) clr(a),a[0]=n
 
-// return index of highest set bit 0-4095, or -1 if none
-static int highest(BN a)
+// Return index of most signifcant bit set in the BN, 0 to UNSIGNBITS+31, or -1
+// if none. bit(msb(a)) will always be true for a non-zero BN.
+static int msb(BN a)
 {
     int i, j;
 
-    for (i=BWORDS-1; i >= 0; i--)
+    for (i=BNWORDS-1; i >= 0; i--)
         if (a[i]) 
             for(j=31; j >= 0; j--)
                 if (a[i] & 1<<j) 
@@ -44,7 +48,7 @@ static void shl(BN a)
 {
     int i, carry=0;
 
-    for (i=0; i < BWORDS; i++)
+    for (i=0; i < BNWORDS; i++)
     {
         int c=a[i] >= 0x80000000;
         a[i]=(a[i] << 1) | carry;
@@ -57,7 +61,7 @@ static void add(BN a, BN b)
 {
     int i, carry=0;
 
-    for (i=0; i < BWORDS; i++) 
+    for (i=0; i < BNWORDS; i++) 
     {
         uint64_t n = (uint64_t)a[i] + (uint64_t)b[i] + carry;
         a[i]=n & 0xffffffff;
@@ -70,7 +74,7 @@ static void sub(BN a, BN b)
 {
     int i, carry=0;
 
-    for (i=0; i < BWORDS; i++) 
+    for (i=0; i < BNWORDS; i++) 
     {
         uint64_t n = (uint64_t)a[i] - (uint64_t)b[i] - carry;
         a[i]=n & 0xffffffff;
@@ -83,7 +87,7 @@ static int cmp(BN a, BN b)
 {
     int i;
 
-    for(i=BWORDS-1; i>=0; i--) 
+    for(i=BNWORDS-1; i>=0; i--) 
     {
         if (a[i] < b[i]) return -1;
         if (a[i] > b[i]) return 1;
@@ -94,13 +98,13 @@ static int cmp(BN a, BN b)
 // a = ( a * b ) mod m
 static void mulmod(BN a, BN b, BN m)
 {
-    int i, msb;
+    int i, h;
     BN r;
 
     clr(r);                             // r=0
     
-    msb=highest(b);                     //     
-    for (i=0; i<=msb; i++)              // for each bit in b
+    h=msb(b);                           // get most significant set bit    
+    for (i=0; i<=h; i++)                // for each bit in b
     {
         if (bit(b,i))                   // if it's set
         {
@@ -118,13 +122,13 @@ static void mulmod(BN a, BN b, BN m)
 // a = (a ^ b) mod m
 static void expmod(BN a, BN b, BN m)
 {
-    int i, msb;
+    int i, h;
     BN r;
     
     setn(r,1);                          // r=1
 
-    msb=highest(b);                      
-    for (i=0; i<=msb; i++)              // for each bit in b 
+    h=msb(b);                           // get most significant set bit                         
+    for (i=0; i<=h; i++)                // for each bit in b 
     {
         BN temp;
         if (bit(b,i)) mulmod(r,a,m);    // if set then r = (r*a) mod m
@@ -167,7 +171,7 @@ static int unpack(BN a, uint8_t *data, int size)
 {
     int n;
 
-    if (size > KBYTES || highest(a) >= size*8) return -1;
+    if (size > KBYTES || msb(a) >= size*8) return -1;
 
     for (n=0; n<size; n++) 
     {
@@ -243,14 +247,15 @@ int unsign(uint8_t *blob, int size, char *modulus)
 
 #ifdef POC
 
-#include <errno.h>
-
+// die with a message
 #define die(...) fprintf(stderr, __VA_ARGS__), exit(1)
+
+// print a BN with optional wrapper text
 static void debug(char *before, BN a, char *after)
 {
     int n;
     if (before) fprintf(stderr,"%s", before);
-    for (n=BWORDS-1; n>0; n--) if(a[n]) break; // skip leading zeros
+    for (n=BNWORDS-1; n>0; n--) if(a[n]) break; // skip leading zeros
     fprintf(stderr,"%X", a[n]);   
     for (n--; n>=0; n--) fprintf(stderr, "%08X", a[n]);
     if (after) fprintf(stderr,"%s", after);
@@ -273,11 +278,10 @@ int main(int argc, char *argv[])
     expmod(a,b,m);
     debug("r=",a,"\n");
 }
-
 #else
-// unsign test:
+// unsign test
 // echo hello | openssl rsautl -sign -inkey private.key | ./unsign $(openssl x509 -modulus -noout < public.cert | awk '{print $2}' FS==)
-// (this example will output PKCS#1 padding, followed by 'hello')
+// (note this example will output PKCS#1 padding added by openssl, ending with 'hello')
 int main(int argc, char *argv[])
 {
     int size, err;
@@ -302,7 +306,5 @@ int main(int argc, char *argv[])
     // write decrypted data
     write(1, blob, size);
 }
-
 #endif
 #endif
-

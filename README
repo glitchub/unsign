@@ -38,5 +38,6 @@ of a known signing key or keys. The private key is used by manufuacturer to
 encrypt a SHA256 and assorted metadata that describes the kernel or other file
 image that firmware must authenticate prior to loading. 
 
-Various "bignum" handling functions, and the unsign function itself, are
-defined in unsign.h.
+The firmware loads the signature data into memory and calls the unsign function
+to decrypt it in place. 
+
