@@ -146,22 +146,12 @@ static void expmod(BN a, BN b, BN m)
 // array size is too big for an BN.
 static int pack(BN a, uint8_t *data, int size)
 {
-    int n;
+    int n, i;
 
     if (size > UNSIGNMAX) return -1;
 
     clr(a);
-    for (n=0; n<size; n++)
-    {
-        int d=data[n];
-        switch ((size-1-n) & 3)
-        {
-            case 3: d <<= 24; break;
-            case 2: d <<= 16; break;
-            case 1: d <<= 8; break;
-        }
-        a[(size-1-n)/4] |= d;;
-    }
+    for (n=0, i=size-1; n<size; n++, i--) a[i/4] |= data[n] << ((i&3)*8);
     return 0;
 }
 
@@ -170,21 +160,11 @@ static int pack(BN a, uint8_t *data, int size)
 // size is too small to contain the BN (ignoring leading 0x00's).
 static int unpack(BN a, uint8_t *data, int size)
 {
-    int n;
+    int n, i;
 
     if (size > UNSIGNMAX || msb(a) >= size*8) return -1;
 
-    for (n=0; n<size; n++)
-    {
-        int d=a[(size-1-n)/4];
-        switch((size-1-n) & 3)
-        {
-            case 3: d >>= 24; break;
-            case 2: d >>= 16; break;
-            case 1: d >>= 8; break;
-        }
-        data[n]=d;
-    }
+    for (n=0, i=size-1; n<size; n++, i--) data[n] = a[i/4] >> ((i&3)*8);
 
     return 0;
 }
@@ -194,29 +174,19 @@ static int unpack(BN a, uint8_t *data, int size)
 // long to fit into an BN.
 static int load(BN a, const char *s)
 {
-    int size=strlen(s), n;
-
-    if (size > UNSIGNMAX*2) return -1;
+    int size=strlen(s), n, i;
+    if (size > UNSIGNMAX*2) return -1;  // string too long
 
     clr(a);
-    for (n=0; n < size; n++)
+    for (n=0, i=size-1; n < size; n++, i--)
     {
         int d;
+        // unhex
         if (s[n] >= '0' && s[n] <= '9') d=s[n]-'0';
         else if (s[n] >= 'A' && s[n] <= 'F') d=s[n]-'A'+10;
         else if (s[n] >= 'a' && s[n] <= 'f') d=s[n]-'a'+10;
-        else return -1; // invalid or too long
-        switch((size-1-n) & 7)
-        {
-            case 7: d <<= 28; break;
-            case 6: d <<= 24; break;
-            case 5: d <<= 20; break;
-            case 4: d <<= 16; break;
-            case 3: d <<= 12; break;
-            case 2: d <<= 8; break;
-            case 1: d <<= 4; break;
-        }
-        a[(size-1-n)/8] |= d;
+        else return -1; // bzzt
+        a[i/8] |= d << ((i&7)*4);
     }
     return 0;
 }
