@@ -1,0 +1,56 @@
+Standalone openssl RSA signature decryption, for use with boot firmware.
+
+"make test" performs the following procedure:
+
+    Create the unsign binary with 'make'.
+
+    Generate an RSA key with some power-of-2 bits between 512 and 4096. For
+    expedience we'll use 1024 (but in real life, use 4096):
+
+        openssl genrsa 1024 > private.key
+
+    Extract the private key modulus as a hex string, this is the public key:
+
+        openssl rsa -modulus -noout < private.key | awk -F= '{print $2}' > public.key
+
+    Create a dummy "signature blob". The blob must be the same length as the key,
+    but numerically less when considered as a monolithic big-endian number.
+    This is guaranteed if the MSB of the first byte is zero, therefore for this
+    test we simply generate an ASCII string of the correct length (128 bytes):
+
+        printf X%.0s {1..128} > sig.dat
+
+    Encrypt the blob with the openssl private key:
+
+        openssl rsautl -sign -raw -inkey private.key < sig.dat > sig.sig
+
+    sig.sig represents the data that would be bundled with a target image for
+    boot firmware to unsign:
+
+        ./unsign $(cat public.key) < sig.sig; echo
+
+    This outputs the same string as the contents of sig.dat.
+
+    Note that passing in the wrong key doesn't result in an error, it results
+    in garbage output.
+
+In practice, the signature blob doesn't contain a string, it contains a data
+structure that includes the hash of the target image, similar to:
+
+    struct signature
+    {
+        int8_t zeros[X];        // where X is at least 1, pad the structure to the size of the key
+        uint32_t magic;         // e.g. 0xCAFEBABE, reduce the chance that failed decrypt looks legit
+        uint8_t sha256[32];     // hash of the target image
+        ...                     // other data of interest: image version, build date, etc.
+    }
+
+unsign.c is compiled into boot firmware along with one or more public key
+strings.
+
+The firmware knows how to locate the encrypted signature. Typically it's
+appended to the target image, so the image + signature can be retrieved into
+memory at once. Defintely avoid reading the image once to verify it, then again
+to load it.
+
+The firmware unsigns the signature and verifies that correctness.
