@@ -1,14 +1,12 @@
-// RSA signature decryption, works with any size signature up tp UNSIGNBITS.
+// RSA signature decryption, works with any size signature up to UNSIGNBITS.
 
 // See https://github.com/glitchub/unsign for more information.
 
 // This software is released as-is into the public domain, as described at
 // https://unlicense.org. Do whatever you like with it.
 
-#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include <unistd.h>
 #include "unsign.h"
 
 // The "bignum" array type, note passed by reference in all cases.
@@ -21,13 +19,15 @@ typedef uint32_t BN[BNWORDS];
 // a = 0
 static void clr(BN a)
 {
-    for (int i = 0; i < BNWORDS; i++) a[i] = 0;
+    int i;
+    for (i = 0; i < BNWORDS; i++) a[i] = 0;
 }
 
 // a = b
 static void set(BN a, BN b)
 {
-    for (int i = 0; i < BNWORDS; i++) a[i] = b[i];
+    int i;
+    for (i = 0; i < BNWORDS; i++) a[i] = b[i];
 }
 
 // a = n, where n is an int
@@ -56,7 +56,7 @@ static void shl(BN a)
 {
     int i, carry = 0;
 
-    for (i=0; i < BNWORDS; i++)
+    for (i = 0; i < BNWORDS; i++)
     {
         int c = a[i] >= 0x80000000;
         a[i] = (a[i] << 1) | carry;
@@ -151,7 +151,7 @@ static void expmod(BN a, BN b, BN m)
 // Given an BN and a pointer to data array of specified size, pack the
 // big-endian array into the little-endian BN and return 0. Or return -1 if the
 // array is larger than a BN.
-static int pack(BN a, uint8_t *data, int size)
+static int pack(BN a, const uint8_t *data, int size)
 {
     int n, i;
 
@@ -201,7 +201,7 @@ static int load(BN a, const char *s)
 // Given a pointer to an openssl RSA signature blob, size in bytes, and a hex
 // modulus string, decrypt the blob in place and return 0. This does not remove
 // PKCS#1 padding, if any. Non-zero indicates some error.
-int unsign(uint8_t *blob, int size, char *modulus)
+int unsign(uint8_t *blob, int size, const char *modulus)
 {
     BN sig, e, mod;
 

@@ -20,4 +20,4 @@ test: unsign
         # woot
 	echo "Test pass!"
 
-clean:; rm -rf unsign *.o sig.* *.key
+clean:; git clean -f

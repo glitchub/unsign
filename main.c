@@ -9,8 +9,6 @@
 
 int main(int argc, char *argv[])
 {
-    // echo hello | openssl rsautl -sign -inkey private.key | ./unsign $(openssl x509 -modulus -noout < public.cert | awk '{print $2}' FS==)
-    // (note this example will output PKCS#1 padding added by openssl, followed by 'hello')
     int size, err;
     uint8_t blob[(UNSIGNBITS / 8) + 1]; // allow reading too many bytes, so we can fail on oversize input
 
@@ -33,4 +31,6 @@ int main(int argc, char *argv[])
     // Write the decrypted blob.
     // If the wrong key was supplied then we'll output garbage here.
     write(1, blob, size);
+
+    return 0;
 }
